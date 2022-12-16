@@ -6,6 +6,7 @@ import java.lang.Integer.min
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
+import kotlin.system.exitProcess
 
 fun main() {
     Day15(File("src/main/resources/input15.txt")).run()
@@ -38,15 +39,24 @@ data class Day15(val inputFile: File) : Runnable {
         val maxX = min(sensors.maxOf { it.pos.x }, 4000000)
         val maxY = min(sensors.maxOf { it.pos.y }, 4000000)
 
-        val window = Window(
-            maxX / 2f,
-            maxY / 2f,
-            max(maxX, maxY)
+        var window = Window(
+            Vec2(0, 0),
+            Vec2(maxX, maxY),
+            Vec2(maxX / RESOLUTION, maxY / RESOLUTION)
         )
-        printRaster(window.rasterize(sensors))
+
+        var minValue = analyzeRaster(window.rasterize(sensors))
+        window = Window(
+            (minValue - Vec2(1000)).max(Vec2(0)),
+            (minValue + Vec2(1000)).min(Vec2(maxX, maxY)),
+            Vec2(1)
+        )
+
+        minValue = analyzeRaster(window.rasterize(sensors))
+        println(minValue)
     }
 
-    fun printRaster(raster: Raster) {
+    fun analyzeRaster(raster: Raster): Vec2 {
         fun sigmoidChar(value: Int): Char {
             val sigmoid = 1.0 / (1.0 + exp(-(0.000001 * value)))
 
@@ -57,7 +67,7 @@ data class Day15(val inputFile: File) : Runnable {
         var minX = 0
         var minY = 0
         raster.forEachIndexed { y, line ->
-            print("%03d ".format(y))
+//            print("%03d ".format(y))
 
             line.forEachIndexed { x, it ->
                 if (it < min) {
@@ -66,35 +76,33 @@ data class Day15(val inputFile: File) : Runnable {
                     minX = x
                 }
 
-                print(if (it != 0) "${sigmoidChar(it)}" else ".")
+//                print(if (it != 0) "${sigmoidChar(it)}" else ".")
             }
-            println()
+//            println()
         }
 
         println("min at $minX, $minY valued $min")
+
+        if (min == 0) {
+            println("Found beacon at $minX, $minY!")
+            exitProcess(0)
+        }
+
+        return Vec2(minX, minY)
     }
 
     data class Window(
-        private val centerCellX: Float,
-        private val centerCellY: Float,
-        val cellsPerWindow: Float
+        val min: Vec2,
+        val max: Vec2,
+        val step: Vec2
     ) {
-
         companion object {
-            const val RESOLUTION = 100f
+            const val RESOLUTION = 10000
         }
 
-        private val minX = (centerCellX - cellsPerWindow / 2f).toInt()
-        private val minY = (centerCellY - cellsPerWindow / 2f).toInt()
-
-        private val maxX = (centerCellX + cellsPerWindow / 2f).toInt()
-        private val maxY = (centerCellY + cellsPerWindow / 2f).toInt()
-
-        private val step = (cellsPerWindow / RESOLUTION).toInt()
-
         fun rasterize(sensors: List<Sensor>): Raster {
-            return (minY..maxY step step).map { y ->
-                (minX..maxX step step).map { x ->
+            return (min.y..max.y step step.y).map { y ->
+                (min.x..max.x step step.x).map { x ->
                     sensors.sumOf {
                         if (it.inRange(Vec2(x, y)))
                             it.range() - (it.pos - Vec2(x, y)).manhattanLength() + 1
@@ -177,6 +185,18 @@ data class Day15(val inputFile: File) : Runnable {
 
         operator fun times(other: Int): Vec2 {
             return Vec2(other * x, other * y)
+        }
+
+        operator fun div(other: Int): Vec2 {
+            return Vec2(x / other, y / other)
+        }
+
+        fun min(other: Vec2): Vec2 {
+            return Vec2(min(x, other.x), min(y, other.y))
+        }
+
+        fun max(other: Vec2): Vec2 {
+            return Vec2(max(x, other.x), max(y, other.y))
         }
 
         fun manhattanLength(): Int {

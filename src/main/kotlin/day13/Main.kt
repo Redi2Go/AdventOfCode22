@@ -2,6 +2,7 @@ package day13
 
 import org.json.simple.parser.JSONParser
 import java.io.File
+import java.util.SortedSet
 import kotlin.math.max
 
 fun main() {
@@ -21,20 +22,46 @@ data class Day13(val inputFile: File) : Runnable {
             .chunked(2)
             .map { Pair(it[0] as List<*>, it[1] as List<*>) }
 
-        val correctOrderPairs = packetPairs.filter { packetPair ->
-            packetPair.first.zip(packetPair.second).forEach { // not all items checked
-                val result = PacketComparable().compare(it.first, it.second)
-                if (result == PacketComparable.UNORDERED)
-                    return@filter false
-                else if (result == PacketComparable.ORDERED)
-                    return@filter true
+        val packets = packetPairs
+            .mapIndexed { index, packetPair ->
+                Pair(index + 1, packetPair)
             }
 
-            return@filter true
+        part2(packets)
+    }
+
+    fun part1(packets: List<Pair<Int, Pair<List<*>, List<*>>>>) {
+        val correctOrderPairs = packets.filter { packetPair ->
+            PacketComparable().compare(packetPair.second.first, packetPair.second.second) != -1
         }
 
         println(correctOrderPairs)
+        println(correctOrderPairs.sumOf { it.first })
     }
+
+    fun part2(packetPairs: List<Pair<Int, Pair<List<*>, List<*>>>>) {
+        val packets = packetPairs.flatMap { listOf(it.second.first, it.second.second) }
+
+        val dividers = listOf(
+            listOf(listOf(2.toLong())),
+            listOf(listOf(6.toLong()))
+        )
+
+        val sortedPackets = packets
+            .union(dividers)
+            .toSortedSet(PacketComparable()::compare)
+            .reversed()
+            .mapIndexed { index, packet ->
+                Pair(index + 1, packet)
+            }
+
+        sortedPackets.forEach {
+            println(it)
+        }
+
+        val dividerIndices = sortedPackets.filter { dividers.contains(it.second) }.take(2).map { it.first }
+        println(dividerIndices[0] * dividerIndices[1])
+        }
 
     class PacketComparable : Comparator<Any> {
         companion object {
@@ -43,7 +70,6 @@ data class Day13(val inputFile: File) : Runnable {
             val EQUAL = 0
         }
 
-        @Suppress("UNCHECKED_CAST")
         override fun compare(o1: Any?, o2: Any?): Int {
             if (o1 is Long && o2 is Long)
                 return compareIntegers(o1.toInt(), o2.toInt())
@@ -55,24 +81,27 @@ data class Day13(val inputFile: File) : Runnable {
             else if (o2 is Long)
                 l2 = listOf(o2)
 
-            return compareLists(l1 as List<Long>, l2 as List<Long>)
+            return compareLists(l1 as List<*>, l2 as List<*>)
         }
 
         private fun compareIntegers(int1: Int, int2: Int): Int {
+//            println("$int1 and $int2 are ${int2.compareTo(int1)}")
             return int2.compareTo(int1)
         }
 
-        private fun compareLists(list1: List<Long>, list2: List<Long>): Int {
+        private fun compareLists(list1: List<*>, list2: List<*>): Int {
             (0 until max(list1.size, list2.size)).forEach {i ->
-                if (i >= list1.size)
+                if (i >= list2.size) {
+//                    println("$list1 and $list2 are unordered")
                     return UNORDERED
-                else if (i >= list2.size)
+                } else if (i >= list1.size) {
+//                    println("$list1 and $list2 are ordered")
                     return ORDERED
+                }
 
-                if (list1[i] < list2[i])
-                    return ORDERED
-                else if (list1[i] > list2[i])
-                    return UNORDERED
+                val comparison = compare(list1[i], list2[i])
+                if (comparison != EQUAL)
+                    return comparison
             }
 
             return EQUAL

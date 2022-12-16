@@ -1,11 +1,10 @@
 package day15
 
-import day15.Day15.Window.Companion.RESOLUTION
 import java.io.File
-import java.lang.Integer.min
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.system.exitProcess
 
 fun main() {
@@ -34,83 +33,59 @@ data class Day15(val inputFile: File) : Runnable {
     }
 
     fun part2(sensors: List<Sensor>) {
-//        val minX = 0
-//        val minY = 0
         val maxX = min(sensors.maxOf { it.pos.x }, 4000000)
         val maxY = min(sensors.maxOf { it.pos.y }, 4000000)
 
-        var window = Window(
-            Vec2(0, 0),
-            Vec2(maxX, maxY),
-            Vec2(maxX / RESOLUTION, maxY / RESOLUTION)
-        )
-
-        var minValue = analyzeRaster(window.rasterize(sensors))
-        window = Window(
-            (minValue - Vec2(1000)).max(Vec2(0)),
-            (minValue + Vec2(1000)).min(Vec2(maxX, maxY)),
-            Vec2(1)
-        )
-
-        minValue = analyzeRaster(window.rasterize(sensors))
-        println(minValue)
-    }
-
-    fun analyzeRaster(raster: Raster): Vec2 {
-        fun sigmoidChar(value: Int): Char {
-            val sigmoid = 1.0 / (1.0 + exp(-(0.000001 * value)))
-
-            return 'a' + (sigmoid * ('z' - 'a')).toInt()
-        }
-
-        var min = Integer.MAX_VALUE
-        var minX = 0
-        var minY = 0
-        raster.forEachIndexed { y, line ->
-//            print("%03d ".format(y))
-
-            line.forEachIndexed { x, it ->
-                if (it < min) {
-                    min = it
-                    minY = y
-                    minX = x
+        var min = Long.MAX_VALUE
+        (0..maxX).forEach { x ->
+            val function = { y: Long ->
+                sensors.sumOf {
+                    if (it.inRange(Vec2(x, y.toInt())))
+                        it.range() - (it.pos - Vec2(x, y.toInt())).manhattanLength() + 1L
+                    else
+                        0L
                 }
-
-//                print(if (it != 0) "${sigmoidChar(it)}" else ".")
             }
-//            println()
+
+            val minY = GradientAscend(
+                function,
+                { it: Long -> max(min(it, maxX.toLong()), 0L)},
+                maxY / 2L
+            ).descend()
+            val value = function(x.toLong())
+            if (value < min) {
+                min = value
+                println("New min $min at ${Vec2(x, minY.toInt())}")
+            }
+
+            if (value == 0L) {
+                println("Beacon at ${Vec2(x, minY.toInt())}")
+                return
+            }
         }
-
-        println("min at $minX, $minY valued $min")
-
-        if (min == 0) {
-            println("Found beacon at $minX, $minY!")
-            exitProcess(0)
-        }
-
-        return Vec2(minX, minY)
     }
 
-    data class Window(
-        val min: Vec2,
-        val max: Vec2,
-        val step: Vec2
+    data class GradientAscend(
+        val function: (Long) -> Long,
+        val clampFunction: (Long) -> Long,
+        val initial: Long
     ) {
-        companion object {
-            const val RESOLUTION = 10000
+        fun descend(): Long {
+            var x = initial
+            for (i in 0 until 100) {
+                val y = function(x)
+                val gradient = finiteDifference(x)
+                if (gradient == 0L)
+                    return x
+
+                x = clampFunction((x + gradient * 0.001f).toLong())
+            }
+
+            return x
         }
 
-        fun rasterize(sensors: List<Sensor>): Raster {
-            return (min.y..max.y step step.y).map { y ->
-                (min.x..max.x step step.x).map { x ->
-                    sensors.sumOf {
-                        if (it.inRange(Vec2(x, y)))
-                            it.range() - (it.pos - Vec2(x, y)).manhattanLength() + 1
-                        else
-                            0
-                    }
-                }
-            }
+        private fun finiteDifference(at: Long): Long {
+            return function(at + 1) - function(at)
         }
     }
 

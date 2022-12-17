@@ -47,9 +47,9 @@ data class Day16(val inputFile: File) : Runnable {
             0
         )
 
-        /*startModel.doAction(startModel.createMoveAction(valves["DD"]!!))
+        startModel.doAction(startModel.createMoveAction(valves["DD"]!!))
         startModel.doAction(startModel.createOpenAction())
-        startModel.doAction(startModel.createMoveAction(valves["CC"]!!))
+        startModel.doAction(startModel.createMoveAction(valves["CC"]!!)) // s
         startModel.doAction(startModel.createMoveAction(valves["BB"]!!))
         startModel.doAction(startModel.createOpenAction())
 //        startModel.doAction(startModel.createMoveAction(valves["AA"]!!))
@@ -58,8 +58,8 @@ data class Day16(val inputFile: File) : Runnable {
         startModel.doAction(startModel.createOpenAction())
 //        startModel.doAction(startModel.createMoveAction(valves["II"]!!))
 //        startModel.doAction(startModel.createMoveAction(valves["AA"]!!))
-        startModel.doAction(startModel.createMoveAction(valves["DD"]!!))
-        startModel.doAction(startModel.createMoveAction(valves["EE"]!!))
+        startModel.doAction(startModel.createMoveAction(valves["DD"]!!)) // o
+        startModel.doAction(startModel.createMoveAction(valves["EE"]!!)) // s
 //        startModel.doAction(startModel.createMoveAction(valves["FF"]!!))
 //        startModel.doAction(startModel.createMoveAction(valves["GG"]!!))
         startModel.doAction(startModel.createMoveAction(valves["HH"]!!))
@@ -68,43 +68,29 @@ data class Day16(val inputFile: File) : Runnable {
 //        startModel.doAction(startModel.createMoveAction(valves["FF"]!!))
         startModel.doAction(startModel.createMoveAction(valves["EE"]!!))
         startModel.doAction(startModel.createOpenAction())
-        startModel.doAction(startModel.createMoveAction(valves["DD"]!!))
+        startModel.doAction(startModel.createMoveAction(valves["DD"]!!)) // o
         startModel.doAction(startModel.createMoveAction(valves["CC"]!!))
         startModel.doAction(startModel.createOpenAction())
 
-        startModel.skip()*/
+        startModel.skip()
 
         val bestMoves = bestMoves(startModel)
         println(bestMoves)
     }
 
-    fun resolveCrossings(workingValves: Map<String, Valve>) {
-        fun findWorkingValves(valve: Valve, visitedValves: MutableSet<Valve>, intend: Int): List<Edge> {
-//        repeat(intend) { print('\t') }
-//        println("Checking ${if (valve.working()) "working" else "broken"} valve ${valve.name} with edges ${valve.edges.map { it.to.name }}")
+    fun findRoute(start: Valve, to: Valve, visitedValves: MutableSet<Valve>): List<Valve> {
+        visitedValves.add(start)
 
-            visitedValves.add(valve)
+        start.edges.forEach {
+            if (it.to == to)
+                return listOf(it.to)
 
-            return valve.edges
-                .filter { !visitedValves.contains(it.to) }
-                .map { edge ->
-                    if (edge.to.working()) {
-//                        repeat(intend + 1) { print('\t') }
-//                    println("Valve ${edge.to.name} is working!")
-                        return@map listOf(edge)
-                    }
-
-                    return@map findWorkingValves(edge.to, visitedValves, intend + 1).map {
-                        Edge(it.travelTime + 1, it.to)
-                    }
-                }
-                .flatten()
+            val route = findRoute(it.to, to, visitedValves)
+            if (route.isNotEmpty())
+                return listOf(it.to) + route
         }
 
-        workingValves.values.forEach {
-            it.edges = findWorkingValves(it, mutableSetOf(), 0)
-//            println()
-        }
+        return listOf()
     }
 
     var best = 0
@@ -218,6 +204,35 @@ data class Day16(val inputFile: File) : Runnable {
 
         override fun toString(): String {
             return "Model[releasedPressure=$releasedPressure, openValves=${openValves.size}]"
+        }
+    }
+
+    fun resolveCrossings(workingValves: Map<String, Valve>) {
+        fun findWorkingValves(valve: Valve, visitedValves: MutableSet<Valve>, intend: Int): List<Edge> {
+//        repeat(intend) { print('\t') }
+//        println("Checking ${if (valve.working()) "working" else "broken"} valve ${valve.name} with edges ${valve.edges.map { it.to.name }}")
+
+            visitedValves.add(valve)
+
+            return valve.edges
+                .filter { !visitedValves.contains(it.to) }
+                .map { edge ->
+                    if (edge.to.working()) {
+//                        repeat(intend + 1) { print('\t') }
+//                    println("Valve ${edge.to.name} is working!")
+                        return@map listOf(edge)
+                    }
+
+                    return@map findWorkingValves(edge.to, visitedValves, intend + 1).map {
+                        Edge(it.travelTime + 1, it.to)
+                    }
+                }
+                .flatten()
+        }
+
+        workingValves.values.forEach {
+            it.edges = findWorkingValves(it, mutableSetOf(), 0)
+//            println()
         }
     }
 

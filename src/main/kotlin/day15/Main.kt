@@ -2,16 +2,12 @@ package day15
 
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.system.exitProcess
 
 fun main() {
     Day15(File("src/main/resources/input15.txt")).run()
 }
-
-typealias Raster = List<List<Int>>
 
 data class Day15(val inputFile: File) : Runnable {
     override fun run() {
@@ -36,56 +32,67 @@ data class Day15(val inputFile: File) : Runnable {
         val maxX = min(sensors.maxOf { it.pos.x }, 4000000)
         val maxY = min(sensors.maxOf { it.pos.y }, 4000000)
 
-        var min = Long.MAX_VALUE
-        (0..maxX).forEach { x ->
-            val function = { y: Long ->
-                sensors.sumOf {
-                    if (it.inRange(Vec2(x, y.toInt())))
-                        it.range() - (it.pos - Vec2(x, y.toInt())).manhattanLength() + 1L
-                    else
-                        0L
+        val steps = Vec2(maxX / 10, maxY / 10)
+
+        var min = Integer.MAX_VALUE
+        (0..maxY step steps.y).forEach { y ->
+            (0..maxX step steps.x).forEach { x ->
+                val function = { at: Vec2 ->
+                    sensors.sumOf {
+                        if (it.inRange(at))
+                            it.range() - (it.pos - at).manhattanLength() + 1
+                        else
+                            0
+                    }
                 }
-            }
 
-            val minY = GradientAscend(
-                function,
-                { it: Long -> max(min(it, maxX.toLong()), 0L)},
-                maxY / 2L
-            ).descend()
-            val value = function(x.toLong())
-            if (value < min) {
-                min = value
-                println("New min $min at ${Vec2(x, minY.toInt())}")
-            }
+                val minPos = GradientDescend(
+                    function,
+                    { it: Vec2 -> it.x >= 0 && it.y >= 0 && it.x <= maxX && it.y <= maxY },
+                    Vec2(x, y)
+                ).descend()
+                val value = function(minPos)
+                if (value < min) {
+                    min = value
+                    println("New min $min at $minPos")
+                }
 
-            if (value == 0L) {
-                println("Beacon at ${Vec2(x, minY.toInt())}")
-                return
+                if (value == 0) {
+                    println("Beacon at $minPos; frequency ${minPos.x * 4000000L + minPos.y}")
+                    return
+                }
             }
         }
     }
 
-    data class GradientAscend(
-        val function: (Long) -> Long,
-        val clampFunction: (Long) -> Long,
-        val initial: Long
+    data class GradientDescend(
+        val function: (Vec2) -> Int,
+        val isInBoundsFunction: (Vec2) -> Boolean,
+        val initial: Vec2
     ) {
-        fun descend(): Long {
-            var x = initial
-            for (i in 0 until 100) {
-                val y = function(x)
-                val gradient = finiteDifference(x)
-                if (gradient == 0L)
-                    return x
-
-                x = clampFunction((x + gradient * 0.001f).toLong())
-            }
-
-            return x
+        companion object {
+            val DIRECTIONS = listOf(
+                Vec2(1, 1),
+                Vec2(-1, 1),
+                Vec2(1, -1),
+                Vec2(-1, -1),
+                Vec2(1, 0),
+                Vec2(-1, 0),
+                Vec2(0, 1),
+                Vec2(0, -1)
+            )
         }
 
-        private fun finiteDifference(at: Long): Long {
-            return function(at + 1) - function(at)
+        fun descend(): Vec2 {
+            var x = initial
+
+            while(true) {
+                val y = function(x)
+
+                x += DIRECTIONS.firstOrNull {
+                    isInBoundsFunction(x + it) && function(x + it) < y
+                } ?: return x
+            }
         }
     }
 

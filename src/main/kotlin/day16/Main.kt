@@ -25,8 +25,8 @@ data class Day16(val inputFile: File) : Runnable {
             }
 
         val valves = sValves.associate {
-            it.name to Valve(it.name, it.rate, listOf())
-        }
+                it.name to Valve(it.name, it.rate, listOf())
+            }
 
         valves.values.zip(sValves).forEach { pair ->
             pair.first.edges = pair.second.edges.map { sValve ->
@@ -48,51 +48,47 @@ data class Day16(val inputFile: File) : Runnable {
         )
 
         val routes = valves.values.associate { current ->
-            current to workingValves
+            println(current)
+
+            return@associate current to workingValves
                 .filter {
                     it.value != current
                 }.map {
-                    Pair(it.key, findShortestPath(current, it.value, mutableSetOf()))
-                }
+                    valves[it.key]!! to findShortestPath(current, it.value, mutableSetOf(), 0)
+                }.toMap()
         }
 
-        do {
-            val bestValve = workingValves.values
-                .filter { !startModel.openValves.contains(it) && startModel.currentValve != it }
-                .maxBy { to ->
-
-                    val shortestPath =
-                        findShortestPath(startModel.currentValve, to, mutableSetOf()) ?: return@maxBy Integer.MIN_VALUE
-
-//                    val score = -shortestPath.sumOf { it.travelTime } * 100000 + to.rate
-
-                    val score = startModel.scoreValve(to, shortestPath.sumOf { it.travelTime })
-
-                    println("Valve ${to.name} has score $score")
-
-                    return@maxBy score
-                }
-
-            findShortestPath(startModel.currentValve, bestValve, mutableSetOf())!!.forEach {
-                startModel.doAction(Action('M', it.to))
-            }
-            startModel.doAction(Action('O', bestValve))
-
-            println("Valve ${bestValve.name} with rate ${bestValve.rate}")
-        } while (!(startModel.openValves.containsAll(startModel.workingValves)))
-
-        startModel.skip()
-
-        println(startModel.releasedPressure)
-
-        println()
-
-//        routes.forEach {
-//            println(it)
-//        }
+//        println(bestMoves(startModel))
+        println(bestOrder(workingValves.values.toList(), 30, valves["AA"]!!, routes))
     }
 
-    fun findShortestPath(start: Valve, to: Valve, visitedEdges: MutableSet<Edge>): Set<Edge>? {
+    fun bestOrder(
+        remainingValves: List<Valve>,
+        time: Int,
+        lastValve: Valve,
+        routes: Map<Valve, Map<Valve, Set<Edge>?>>
+    ): Int {
+        if (time <= 0 || remainingValves.isEmpty())
+            return 0
+
+        return remainingValves.maxOf { thisValve ->
+            val route = routes[lastValve]!![thisValve] ?: return@maxOf 0
+
+            val remainingTime = time - route.sumOf { it.travelTime } - 1
+
+            val released = remainingTime * thisValve.rate
+
+            val newRemainingValves = remainingValves.toMutableList()
+            newRemainingValves -= thisValve
+
+            return@maxOf released + bestOrder(newRemainingValves, remainingTime, thisValve, routes)
+        }
+    }
+
+    fun findShortestPath(start: Valve, to: Valve, visitedEdges: MutableSet<Edge>, len: Int): Set<Edge>? {
+        if (len >= 5)
+            return null
+
         val paths = start.edges
             .filter { !visitedEdges.contains(it) }
             .sortedBy { it.travelTime }
@@ -103,7 +99,7 @@ data class Day16(val inputFile: File) : Runnable {
                 val newVisitedEdges = visitedEdges.toMutableSet()
                 newVisitedEdges += it
 
-                val shortestPath = findShortestPath(it.to, to, newVisitedEdges)
+                val shortestPath = findShortestPath(it.to, to, newVisitedEdges, len + 1)
 
                 return@mapNotNull if (shortestPath != null) newVisitedEdges + shortestPath else null
             }
@@ -114,24 +110,6 @@ data class Day16(val inputFile: File) : Runnable {
             paths.minBy { path ->
                 path.sumOf { it.travelTime }
             }
-    }
-
-    fun findRoute(start: Valve, to: Valve, visitedValves: MutableSet<Valve>): Int {
-        visitedValves.add(start)
-
-        start.edges
-            .filter { !visitedValves.contains(it.to) }
-            .sortedBy { it.travelTime }
-            .forEach {
-                if (it.to == to)
-                    return 1
-
-                val route = findRoute(it.to, to, visitedValves)
-                if (route != -1)
-                    return route + 1
-            }
-
-        return -1
     }
 
     var best = 0
@@ -163,7 +141,9 @@ data class Day16(val inputFile: File) : Runnable {
 
             newModel.doAction(it)
 
-            return@map bestMoves(newModel)
+            val bestMove = bestMoves(newModel)
+
+            return@map bestMove
         }.maxBy { it.releasedPressure }
     }
 
@@ -215,8 +195,11 @@ data class Day16(val inputFile: File) : Runnable {
         }
 
         fun getPossibleActions(): List<Action> {
-            if (openValves.containsAll(workingValves))
+            if (openValves.containsAll(workingValves) || currentValve.edges.none { it.travelTime <= 30 - minute - 1 })
                 return listOf()
+
+            if (currentValve.edges.size == 1 && !openValves.contains(currentValve))
+                return listOf(Action('O', currentValve))
 
             val possibilities = currentValve.edges
                 .map { Action('M', it.to) }
@@ -228,7 +211,9 @@ data class Day16(val inputFile: File) : Runnable {
                 )
                 .toList()
 
-            return possibilities
+            return possibilities.filter {
+                !openValves.contains(it.valve) || it.valve.edges.size > 1
+            }
 
 //            val noReturn = possibilities.filter { it.type != 'M' || it.valve != previous }
 //            return (if (noReturn.isEmpty())

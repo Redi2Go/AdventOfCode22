@@ -47,50 +47,91 @@ data class Day16(val inputFile: File) : Runnable {
             0
         )
 
-        startModel.doAction(startModel.createMoveAction(valves["DD"]!!))
-        startModel.doAction(startModel.createOpenAction())
-        startModel.doAction(startModel.createMoveAction(valves["CC"]!!)) // s
-        startModel.doAction(startModel.createMoveAction(valves["BB"]!!))
-        startModel.doAction(startModel.createOpenAction())
-//        startModel.doAction(startModel.createMoveAction(valves["AA"]!!))
-//        startModel.doAction(startModel.createMoveAction(valves["II"]!!))
-        startModel.doAction(startModel.createMoveAction(valves["JJ"]!!))
-        startModel.doAction(startModel.createOpenAction())
-//        startModel.doAction(startModel.createMoveAction(valves["II"]!!))
-//        startModel.doAction(startModel.createMoveAction(valves["AA"]!!))
-        startModel.doAction(startModel.createMoveAction(valves["DD"]!!)) // o
-        startModel.doAction(startModel.createMoveAction(valves["EE"]!!)) // s
-//        startModel.doAction(startModel.createMoveAction(valves["FF"]!!))
-//        startModel.doAction(startModel.createMoveAction(valves["GG"]!!))
-        startModel.doAction(startModel.createMoveAction(valves["HH"]!!))
-        startModel.doAction(startModel.createOpenAction())
-//        startModel.doAction(startModel.createMoveAction(valves["GG"]!!))
-//        startModel.doAction(startModel.createMoveAction(valves["FF"]!!))
-        startModel.doAction(startModel.createMoveAction(valves["EE"]!!))
-        startModel.doAction(startModel.createOpenAction())
-        startModel.doAction(startModel.createMoveAction(valves["DD"]!!)) // o
-        startModel.doAction(startModel.createMoveAction(valves["CC"]!!))
-        startModel.doAction(startModel.createOpenAction())
+        val routes = valves.values.associate { current ->
+            current to workingValves
+                .filter {
+                    it.value != current
+                }.map {
+                    Pair(it.key, findShortestPath(current, it.value, mutableSetOf()))
+                }
+        }
+
+        do {
+            val bestValve = workingValves.values
+                .filter { !startModel.openValves.contains(it) && startModel.currentValve != it }
+                .maxBy { to ->
+
+                    val shortestPath =
+                        findShortestPath(startModel.currentValve, to, mutableSetOf()) ?: return@maxBy Integer.MIN_VALUE
+
+//                    val score = -shortestPath.sumOf { it.travelTime } * 100000 + to.rate
+
+                    val score = startModel.scoreValve(to, shortestPath.sumOf { it.travelTime })
+
+                    println("Valve ${to.name} has score $score")
+
+                    return@maxBy score
+                }
+
+            findShortestPath(startModel.currentValve, bestValve, mutableSetOf())!!.forEach {
+                startModel.doAction(Action('M', it.to))
+            }
+            startModel.doAction(Action('O', bestValve))
+
+            println("Valve ${bestValve.name} with rate ${bestValve.rate}")
+        } while (!(startModel.openValves.containsAll(startModel.workingValves)))
 
         startModel.skip()
 
-        val bestMoves = bestMoves(startModel)
-        println(bestMoves)
+        println(startModel.releasedPressure)
+
+        println()
+
+//        routes.forEach {
+//            println(it)
+//        }
     }
 
-    fun findRoute(start: Valve, to: Valve, visitedValves: MutableSet<Valve>): List<Valve> {
+    fun findShortestPath(start: Valve, to: Valve, visitedEdges: MutableSet<Edge>): Set<Edge>? {
+        val paths = start.edges
+            .filter { !visitedEdges.contains(it) }
+            .sortedBy { it.travelTime }
+            .mapNotNull {
+                if (it.to == to)
+                    return setOf(it)
+
+                val newVisitedEdges = visitedEdges.toMutableSet()
+                newVisitedEdges += it
+
+                val shortestPath = findShortestPath(it.to, to, newVisitedEdges)
+
+                return@mapNotNull if (shortestPath != null) newVisitedEdges + shortestPath else null
+            }
+
+        return if (paths.isEmpty())
+            null
+        else
+            paths.minBy { path ->
+                path.sumOf { it.travelTime }
+            }
+    }
+
+    fun findRoute(start: Valve, to: Valve, visitedValves: MutableSet<Valve>): Int {
         visitedValves.add(start)
 
-        start.edges.forEach {
-            if (it.to == to)
-                return listOf(it.to)
+        start.edges
+            .filter { !visitedValves.contains(it.to) }
+            .sortedBy { it.travelTime }
+            .forEach {
+                if (it.to == to)
+                    return 1
 
-            val route = findRoute(it.to, to, visitedValves)
-            if (route.isNotEmpty())
-                return listOf(it.to) + route
-        }
+                val route = findRoute(it.to, to, visitedValves)
+                if (route != -1)
+                    return route + 1
+            }
 
-        return listOf()
+        return -1
     }
 
     var best = 0
@@ -177,7 +218,7 @@ data class Day16(val inputFile: File) : Runnable {
             if (openValves.containsAll(workingValves))
                 return listOf()
 
-            val possibilities =  currentValve.edges
+            val possibilities = currentValve.edges
                 .map { Action('M', it.to) }
                 .union(
                     if (currentValve.working() && !openValves.contains(currentValve))
@@ -187,11 +228,20 @@ data class Day16(val inputFile: File) : Runnable {
                 )
                 .toList()
 
-            val noReturn = possibilities.filter { it.type != 'M' || it.valve != previous }
-            return (if (noReturn.isEmpty())
-                possibilities
-            else
-                noReturn)
+            return possibilities
+
+//            val noReturn = possibilities.filter { it.type != 'M' || it.valve != previous }
+//            return (if (noReturn.isEmpty())
+//                possibilities
+//            else
+//                noReturn)
+        }
+
+        fun scoreValve(valve: Valve, travelTime: Int): Int {
+            if (!valve.working() || openValves.contains(valve))
+                return Integer.MIN_VALUE
+
+            return valve.rate * (30 - minute - 1 - travelTime)
         }
 
         fun createMoveAction(to: Valve): Action {
@@ -261,7 +311,7 @@ data class Day16(val inputFile: File) : Runnable {
         }
 
         override fun toString(): String {
-            return "Valve[$name, $rate, ${edges.map { it.to.name }} "
+            return "Valve[$name, $rate]"
         }
     }
 

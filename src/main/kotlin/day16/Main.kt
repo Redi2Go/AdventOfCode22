@@ -25,8 +25,8 @@ data class Day16(val inputFile: File) : Runnable {
             }
 
         val valves = sValves.associate {
-                it.name to Valve(it.name, it.rate, listOf())
-            }
+            it.name to Valve(it.name, it.rate, listOf())
+        }
 
         valves.values.zip(sValves).forEach { pair ->
             pair.first.edges = pair.second.edges.map { sValve ->
@@ -58,11 +58,82 @@ data class Day16(val inputFile: File) : Runnable {
                 }.toMap()
         }
 
-//        println(bestMoves(startModel))
-        println(bestOrder(workingValves.values.toList(), 30, valves["AA"]!!, routes))
+        println(
+            bestPairSimEnv(
+                PairSimEnv(workingValves.values.toList(), 26, 26, valves["AA"]!!, valves["AA"]!!, 0),
+                routes,
+                true
+            )
+        )
+//        println(bestAloneOrder(workingValves.values.toList(), 30, valves["AA"]!!, routes))
     }
 
-    fun bestOrder(
+    data class PairSimEnv(
+        var remainingValves: List<Valve>,
+        var time1: Int,
+        var time2: Int,
+        var lastValve1: Valve,
+        var lastValve2: Valve,
+        var released: Int
+    )
+
+    fun bestPairSimEnv(
+        pairSimEnv: PairSimEnv,
+        routes: Map<Valve, Map<Valve, Set<Edge>?>>,
+        flag: Boolean
+    ): PairSimEnv {
+        if (pairSimEnv.remainingValves.isEmpty())
+            return pairSimEnv
+
+        val lastValve: Valve
+        val time: Int
+        if (pairSimEnv.time1 > pairSimEnv.time2) {
+            lastValve = pairSimEnv.lastValve1
+            time = pairSimEnv.time1
+        } else {
+            lastValve = pairSimEnv.lastValve2
+            time = pairSimEnv.time2
+        }
+
+        val s = pairSimEnv.remainingValves.map { thisValve ->
+            if (time <= 0)
+                return@map pairSimEnv
+
+            val route = routes[lastValve]!![thisValve] ?: return@map pairSimEnv
+            val remainingTime = time - route.sumOf { it.travelTime } - 1
+
+            val newRemainingValves = pairSimEnv.remainingValves.toMutableList()
+            newRemainingValves -= thisValve
+
+            val newPairSimEnv = PairSimEnv(
+                newRemainingValves,
+                pairSimEnv.time1,
+                pairSimEnv.time2,
+                pairSimEnv.lastValve1,
+                pairSimEnv.lastValve2,
+                pairSimEnv.released + remainingTime * thisValve.rate
+            )
+
+            if (pairSimEnv.time1 > pairSimEnv.time2) {
+                newPairSimEnv.time1 = remainingTime
+                newPairSimEnv.lastValve1 = thisValve
+            } else {
+                newPairSimEnv.time2 = remainingTime
+                newPairSimEnv.lastValve2 = thisValve
+            }
+
+            val bestPairSimEnv = bestPairSimEnv(newPairSimEnv, routes, false)
+
+            if (flag)
+                println(bestPairSimEnv)
+
+            return@map bestPairSimEnv
+        }
+
+        return s.maxBy { it.released }
+    }
+
+    fun bestAloneOrder(
         remainingValves: List<Valve>,
         time: Int,
         lastValve: Valve,
@@ -81,7 +152,7 @@ data class Day16(val inputFile: File) : Runnable {
             val newRemainingValves = remainingValves.toMutableList()
             newRemainingValves -= thisValve
 
-            return@maxOf released + bestOrder(newRemainingValves, remainingTime, thisValve, routes)
+            return@maxOf released + bestAloneOrder(newRemainingValves, remainingTime, thisValve, routes)
         }
     }
 
@@ -302,3 +373,5 @@ data class Day16(val inputFile: File) : Runnable {
 
     data class Edge(val travelTime: Int, val to: Valve)
 }
+
+typealias Permutation<T> = List<T>
